@@ -19,7 +19,7 @@ Works on **Kobo, Kindle, and Android**.
 
 ## Installation
 
-### 1. From Git (with submodules)
+### 1. From Git (with submodule)
 
 Clone the repository recursively:
 
@@ -31,7 +31,7 @@ make setup
 
 ### 2. Copying to your device
 
-Copy the plugin directory to your device's KOReader `plugins/` directory:
+Copy the `mdns.koplugin` folder to your device's KOReader `plugins/` directory:
 
 | Device  | Plugin path                                           |
 |---------|-------------------------------------------------------|
@@ -39,17 +39,15 @@ Copy the plugin directory to your device's KOReader `plugins/` directory:
 | Kindle  | `/mnt/us/koreader/plugins/mdns.koplugin/`              |
 | Android | Wherever KOReader is installed → `plugins/mdns.koplugin/` |
 
-> [!TIP]
-> Some e-reader partitions (such as FAT32/vfat over USB mass storage) do not
-> support symlinks. When copying from your computer, use **`-L`** to dereference
-> the `lib/mdns.lua` symlink into a regular file:
-> ```bash
-> # Over SSH with rsync (recommended):
-> rsync -avL --exclude='.git*' . root@<reader-ip>:/mnt/onboard/.adds/koreader/plugins/mdns.koplugin/
->
-> # Or using cp:
-> cp -rL . /Volumes/KOBOeReader/.adds/koreader/plugins/mdns.koplugin/
-> ```
+You can copy via USB mass storage (drag & drop) or over SSH:
+
+```bash
+# Over SSH (example for Kobo):
+rsync -av --exclude='.git*' . root@<reader-ip>:/mnt/onboard/.adds/koreader/plugins/mdns.koplugin/
+
+# Or directly to USB drive:
+cp -r . /Volumes/KOBOeReader/.adds/koreader/plugins/mdns.koplugin/
+```
 
 ### 3. Restart KOReader
 
@@ -74,12 +72,12 @@ mdns.koplugin/
 ├── main.lua                                 # Plugin entry point: lifecycle, menu, events
 ├── .gitmodules                              # Submodule definition
 ├── .submodules/
-│   └── filesync-koplugin/                   # Sparse submodule (only filesync/mdns.lua on disk)
+│   └── filesync-koplugin/                   # Sparse submodule (only filesync/mdns.lua)
 │       └── filesync/
 │           └── mdns.lua
 ├── lib/
-│   └── mdns.lua -> ../.submodules/filesync-koplugin/filesync/mdns.lua
-├── sync-mdns.sh                             # Helper script: sparse-checkout & submodule update
+│   └── mdns.lua                             # Upstream mdns module (real file, FAT32-safe)
+├── sync-mdns.sh                             # Helper: sparse-checkout & copy mdns.lua
 ├── Makefile                                 # `make setup` and `make sync-mdns`
 ├── .github/
 │   └── workflows/
@@ -88,28 +86,21 @@ mdns.koplugin/
 └── README.md
 ```
 
-## Dependency Management: Submodule + Sparse-Checkout + Symlink
+## Dependency Management: Submodule + Sparse-Checkout + Direct Copy
 
 This plugin uses a clean single-file dependency mechanism to track `filesync/mdns.lua`
 from [filesync.koplugin](https://github.com/abrahamnm/filesync.koplugin) without
-bloating the repository with the rest of `filesync`:
+bloating the repository with the rest of `filesync`.
 
-### How it was set up
+### Why a real file in `lib/` instead of a symlink?
 
-```bash
-# 1. Add the submodule into a hidden auxiliary path
-git submodule add https://github.com/abrahamnm/filesync.koplugin.git .submodules/filesync-koplugin
+E-reader user partitions (Kobo `/mnt/onboard`, Kindle `/mnt/us`) are formatted as **FAT32 (VFAT)**.
+FAT32 has **no support for POSIX symlinks**. When copying symlinks to FAT32 on macOS,
+macOS creates an emulated *Minshall-French* file starting with `XSym\n0050...`.
+When KOReader executes `dofile()` on Linux, Lua tries to parse this header and fails with:
+`'=' expected near '0050'`.
 
-# 2. Configure sparse-checkout to checkout only filesync/mdns.lua
-cd .submodules/filesync-koplugin
-git sparse-checkout init --no-cone
-git sparse-checkout set /filesync/mdns.lua
-cd ../..
-
-# 3. Create relative symlink into lib/
-mkdir -p lib
-ln -s ../.submodules/filesync-koplugin/filesync/mdns.lua lib/mdns.lua
-```
+To avoid this, `lib/mdns.lua` is a **real file** copied directly from the sparse submodule.
 
 ### Keeping the mDNS module updated
 
@@ -123,11 +114,14 @@ make sync-mdns
 make sync-mdns MDNS_REF=v1.11.1
 ```
 
-This runs `sync-mdns.sh`, which fetches the ref, re-applies sparse checkout, updates the HEAD in `.submodules/filesync-koplugin`, and ensures the symlink is intact.
+This runs `sync-mdns.sh`, which:
+1. Fetches the ref inside `.submodules/filesync-koplugin`.
+2. Applies sparse-checkout to keep only `/filesync/mdns.lua`.
+3. Copies `filesync/mdns.lua` into `lib/mdns.lua`.
 
-Commit the updated submodule reference:
+Then commit the changes:
 ```bash
-git add .submodules/filesync-koplugin
+git add .submodules/filesync-koplugin lib/mdns.lua
 git commit -m "chore: update filesync submodule (mdns.lua)"
 ```
 

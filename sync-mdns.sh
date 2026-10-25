@@ -1,5 +1,5 @@
 #!/bin/bash
-# sync-mdns.sh — Update the filesync submodule with sparse-checkout
+# sync-mdns.sh — Update the filesync submodule with sparse-checkout and copy mdns.lua
 #
 # Usage:
 #   ./sync-mdns.sh              # update submodule to latest upstream master
@@ -28,9 +28,11 @@ git fetch origin "$REF"
 git checkout FETCH_HEAD
 cd - >/dev/null
 
-# 4. Ensure symlink exists
+# 4. Copy the file into lib/ (do NOT use a symlink: e-readers use FAT32
+#    which cannot handle POSIX symlinks and causes XSym corruption)
 mkdir -p lib
-ln -sf "../$SUBMODULE_DIR/filesync/mdns.lua" lib/mdns.lua
+rm -f lib/mdns.lua
+cp "$SUBMODULE_DIR/filesync/mdns.lua" lib/mdns.lua
 
 echo "✓ Updated $SUBMODULE_DIR to $(git -C "$SUBMODULE_DIR" rev-parse --short HEAD)"
-echo "✓ Symlink verified: lib/mdns.lua -> ../$SUBMODULE_DIR/filesync/mdns.lua"
+echo "✓ Copied real file to lib/mdns.lua (FAT32/e-reader compatible)"
