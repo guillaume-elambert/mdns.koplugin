@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "mdns.koplugin/**"
+      - ".env"
   workflow_dispatch:
     inputs:
       force_release:
@@ -33,8 +34,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Load environment variables from .env
+        run: cat .env >> "$GITHUB_ENV"
+
       - name: Setup submodule sparse-checkout
-        run: bash sync-mdns.sh master
+        run: bash sync-mdns.sh "${DEFAULT_REF}"
 
       - name: Extract version and tag
         id: meta
@@ -80,7 +84,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ steps.meta.outputs.tag }}"
-          ZIP_NAME="mdns.koplugin-${TAG}.zip"
           EXTRA_ARGS=()
           if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
             EXTRA_ARGS+=(--prerelease)

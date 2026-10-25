@@ -1,4 +1,4 @@
-# Check for upstream filesync mdns.lua updates weekly.
+# Check for upstream mdns.lua updates weekly.
 # Opens a PR if the submodule ref has updated.
 name: Sync mdns.lua
 
@@ -19,13 +19,17 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Update filesync submodule and sparse-checkout
-        run: bash sync-mdns.sh master
+      - name: Load environment variables from .env
+        run: cat .env >> "$GITHUB_ENV"
+
+      - name: Update submodule and sparse-checkout
+        run: bash sync-mdns.sh "${DEFAULT_REF}"
 
       - name: Check for changes
         id: diff
         run: |
-          if git diff --quiet .submodules/filesync-koplugin mdns.koplugin/lib/mdns.lua; then
+          TARGET_FILE="${LIB_DIR}/$(basename "${UPSTREAM_FILE}")"
+          if git diff --quiet "${SUBMODULE_DIR}" "${TARGET_FILE}"; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -35,12 +39,12 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "chore: update filesync submodule (mdns.lua)"
-          title: "chore: update filesync submodule (mdns.lua)"
+          commit-message: "chore: update submodule (${{ env.UPSTREAM_FILE }})"
+          title: "chore: update submodule (${{ env.UPSTREAM_FILE }})"
           body: |
-            Automated update of `.submodules/filesync-koplugin` from
-            [filesync.koplugin](https://github.com/abrahamnm/filesync.koplugin).
+            Automated update of `${{ env.SUBMODULE_DIR }}` from
+            ${{ env.UPSTREAM_REPO }}.
 
             Please review the diff and test on-device before merging.
-          branch: auto/sync-mdns
+          branch: auto/sync-submodule
           delete-branch: true

@@ -1,10 +1,12 @@
+-include .env
+export
+
 .PHONY: setup sync-mdns package dev tag release clean help
 
 SHELL := /bin/bash
 
-# The git ref to fetch mdns.lua from. Override on the command line:
-#   make sync-mdns MDNS_REF=v1.11.1
-MDNS_REF ?= master
+# Default ref from .env or fallback
+MDNS_REF ?= $(DEFAULT_REF)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \

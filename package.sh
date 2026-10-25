@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # package.sh — Package KOReader plugin, dereference symlinks, create tag & release archive.
+# Reads configuration defaults from .env if present.
 #
 # Usage:
-#   ./package.sh                # Build dist/mdns.koplugin-v<version>.zip & dist/mdns.koplugin.zip
-#   ./package.sh --dev          # Build a dev/test archive: dist/mdns.koplugin-dev.zip
+#   ./package.sh                # Build dist/<name>-v<version>.zip & dist/<name>.zip
+#   ./package.sh --dev          # Build a dev/test archive: dist/<name>-dev.zip
 #   ./package.sh --tag          # Create git tag (v<version>) locally if not already tagged
 #   ./package.sh --push-tag     # Create git tag and push to remote origin
 #   ./package.sh --release      # Build zip, tag, and publish release via 'gh' CLI if available
@@ -14,10 +15,26 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_NAME="mdns.koplugin"
-PLUGIN_SRC="${SCRIPT_DIR}/${PLUGIN_NAME}"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
+# Load .env if present
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+fi
+
+PLUGIN_NAME="${PLUGIN_NAME:-mdns.koplugin}"
+PLUGIN_DIR="${PLUGIN_DIR:-mdns.koplugin}"
+LIB_DIR="${LIB_DIR:-${PLUGIN_DIR}/lib}"
+UPSTREAM_FILE="${UPSTREAM_FILE:-filesync/mdns.lua}"
+
+PLUGIN_SRC="${SCRIPT_DIR}/${PLUGIN_DIR}"
 META_FILE="${PLUGIN_SRC}/_meta.lua"
 DIST_DIR="${SCRIPT_DIR}/dist"
+UPSTREAM_BASENAME="$(basename "${UPSTREAM_FILE}")"
+TARGET_LIB_FILE="${SCRIPT_DIR}/${LIB_DIR}/${UPSTREAM_BASENAME}"
 
 # Validate source directory and _meta.lua
 if [ ! -d "$PLUGIN_SRC" ]; then
@@ -104,9 +121,9 @@ echo " Version:   ${DISPLAY_VERSION}"
 echo " Tag:       ${TAG_NAME}"
 echo "================================================="
 
-# Ensure submodule is initialized if lib/mdns.lua is missing or broken
-if [ ! -e "${PLUGIN_SRC}/lib/mdns.lua" ]; then
-    echo "lib/mdns.lua not found or broken. Running sync-mdns.sh..."
+# Ensure submodule is initialized if target lib file is missing or broken
+if [ ! -e "$TARGET_LIB_FILE" ]; then
+    echo "${TARGET_LIB_FILE} not found or broken. Running sync-mdns.sh..."
     bash "${SCRIPT_DIR}/sync-mdns.sh"
 fi
 
@@ -124,15 +141,18 @@ find "$STAGING_DIR" -name ".DS_Store" -delete 2>/dev/null || true
 find "$STAGING_DIR" -name "._*" -delete 2>/dev/null || true
 find "$STAGING_DIR" -name "*.swp" -delete 2>/dev/null || true
 
-# Verify that lib/mdns.lua is a real file, not a symlink
-STAGED_MDNS="${STAGING_DIR}/${PLUGIN_NAME}/lib/mdns.lua"
-if [ -L "$STAGED_MDNS" ]; then
-    echo "Error: Symlink was not dereferenced at $STAGED_MDNS" >&2
+# Relative path of LIB_DIR within PLUGIN_DIR
+LIB_REL_DIR="${LIB_DIR#"${PLUGIN_DIR}/"}"
+STAGED_TARGET="${STAGING_DIR}/${PLUGIN_DIR}/${LIB_REL_DIR}/${UPSTREAM_BASENAME}"
+
+# Verify that target lib file is a real file, not a symlink
+if [ -L "$STAGED_TARGET" ]; then
+    echo "Error: Symlink was not dereferenced at $STAGED_TARGET" >&2
     exit 1
 fi
 
-if [ ! -f "$STAGED_MDNS" ]; then
-    echo "Error: Expected file not found at $STAGED_MDNS" >&2
+if [ ! -f "$STAGED_TARGET" ]; then
+    echo "Error: Expected file not found at $STAGED_TARGET" >&2
     exit 1
 fi
 
@@ -143,10 +163,10 @@ rm -f "$PRIMARY_ZIP" "$GENERIC_ZIP"
 echo "Creating zip archive: $(basename "$PRIMARY_ZIP")..."
 (
     cd "$STAGING_DIR"
-    zip -q -r "$PRIMARY_ZIP" "$PLUGIN_NAME"
+    zip -q -r "$PRIMARY_ZIP" "$PLUGIN_DIR"
 )
 
-# Also create/update generic mdns.koplugin.zip for convenience
+# Also create/update generic <name>.zip for convenience
 cp "$PRIMARY_ZIP" "$GENERIC_ZIP"
 
 # Clean up staging directory

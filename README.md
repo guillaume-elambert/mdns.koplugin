@@ -79,6 +79,7 @@ repository root/
 │   ├── main.lua                             # Plugin entry point: lifecycle, menu, events
 │   └── lib/
 │       └── mdns.lua -> ../../.submodules/filesync-koplugin/filesync/mdns.lua
+├── .env                                     # Central configuration for paths & workflows
 ├── .gitmodules                              # Git submodule config
 ├── .submodules/
 │   └── filesync-koplugin/                   # Sparse submodule (only filesync/mdns.lua)
