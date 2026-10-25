@@ -1,4 +1,4 @@
-.PHONY: sync-mdns setup help
+.PHONY: setup sync-mdns package dev tag release clean help
 
 SHELL := /bin/bash
 
@@ -15,3 +15,18 @@ setup: ## Initialize submodule with sparse-checkout and create symlink
 
 sync-mdns: ## Update submodule to MDNS_REF and re-verify sparse-checkout + symlink
 	@bash sync-mdns.sh $(MDNS_REF)
+
+package: ## Build release zip in dist/ with dereferenced symlinks
+	@bash package.sh
+
+dev: ## Build dev/test zip in dist/ (includes git commit hash in version)
+	@bash package.sh --dev
+
+tag: ## Create local git tag matching version in _meta.lua
+	@bash package.sh --tag
+
+release: ## Build archive, tag, and publish GitHub release via gh CLI
+	@bash package.sh --release
+
+clean: ## Remove build artifacts in dist/
+	@rm -rf dist

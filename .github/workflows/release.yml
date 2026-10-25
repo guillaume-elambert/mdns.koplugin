@@ -1,0 +1,99 @@
+name: Release Plugin
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "mdns.koplugin/**"
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Force recreate/overwrite release even if tag exists"
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup submodule sparse-checkout
+        run: bash sync-mdns.sh master
+
+      - name: Extract version and tag
+        id: meta
+        run: |
+          VERSION=$(./package.sh --get-version)
+          TAG=$(./package.sh --get-tag)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Tag: ${TAG}"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG is new."
+          fi
+
+      - name: Build release archive
+        if: steps.check_tag.outputs.exists == 'false' || github.event.inputs.force_release == 'true'
+        run: ./package.sh
+
+      - name: Configure Git Author
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push git tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Publish GitHub Release
+        if: steps.check_tag.outputs.exists == 'false' || github.event.inputs.force_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          ZIP_NAME="mdns.koplugin-${TAG}.zip"
+          EXTRA_ARGS=()
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            EXTRA_ARGS+=(--prerelease)
+          fi
+
+          # If release already exists (force release mode), upload assets to it
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Updating existing release $TAG..."
+            gh release upload "$TAG" dist/*.zip --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" dist/*.zip \
+              --title "$TAG" \
+              --generate-notes \
+              "${EXTRA_ARGS[@]}"
+          fi

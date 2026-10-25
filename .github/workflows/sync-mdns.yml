@@ -25,7 +25,7 @@ jobs:
       - name: Check for changes
         id: diff
         run: |
-          if git diff --quiet .submodules/filesync-koplugin lib/mdns.lua; then
+          if git diff --quiet .submodules/filesync-koplugin mdns.koplugin/lib/mdns.lua; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"

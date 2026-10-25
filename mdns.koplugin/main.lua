@@ -1,5 +1,5 @@
 --[[--
-mDNS Responder plugin for KOReader.
+mDNS plugin for KOReader.
 
 Announces the device on the local network via multicast DNS (Bonjour/Avahi)
 so it can be reached at `<hostname>.local`.  Starts automatically when Wi-Fi
@@ -154,7 +154,7 @@ end
 -- mDNS start / stop
 ------------------------------------------------------------------------
 
---- Start the mDNS responder.  Safe to call repeatedly (no-op if already
+--- Start the mDNS.  Safe to call repeatedly (no-op if already
 --- running).  Failures are logged but never raise.
 function MdnsPlugin:_startMdns()
     if self._mdns and self._mdns:isRunning() then
@@ -197,7 +197,7 @@ function MdnsPlugin:_startMdns()
     return true
 end
 
---- Stop the mDNS responder (sends the goodbye packet).
+--- Stop the mDNS (sends the goodbye packet).
 function MdnsPlugin:_stopMdns()
     if not self._mdns then return end
     pcall(function() self._mdns:stop() end)
@@ -231,7 +231,7 @@ end
 
 function MdnsPlugin:addToMainMenu(menu_items)
     menu_items.mdns = {
-        text = _("mDNS Responder"),
+        text = _("mDNS"),
         sorting_hint = "network",
         sub_item_table = {
             {
@@ -249,11 +249,11 @@ function MdnsPlugin:addToMainMenu(menu_items)
                     local running = self._mdns and self._mdns:isRunning()
                     local msg
                     if running then
-                        msg = _("mDNS responder is active.\n\n") ..
+                        msg = _("mDNS is active.\n\n") ..
                               _("Hostname: ") .. hostname .. ".local\n" ..
                               _("IP: ") .. (ip or _("unknown"))
                     else
-                        msg = _("mDNS responder is not running.\n\n") ..
+                        msg = _("mDNS is not running.\n\n") ..
                               _("It will start automatically when Wi-Fi connects.")
                     end
                     UIManager:show(InfoMessage:new{
@@ -286,11 +286,11 @@ function MdnsPlugin:addToMainMenu(menu_items)
                     local ok = self:_startMdns()
                     if ok then
                         UIManager:show(InfoMessage:new{
-                            text = _("mDNS responder started."),
+                            text = _("mDNS started."),
                         })
                     else
                         UIManager:show(InfoMessage:new{
-                            text = _("Failed to start mDNS responder. Check the logs."),
+                            text = _("Failed to start mDNS. Check the logs."),
                         })
                     end
                     if touchmenu_instance then touchmenu_instance:updateItems() end
@@ -304,7 +304,7 @@ function MdnsPlugin:addToMainMenu(menu_items)
                 callback = function(touchmenu_instance)
                     self:_stopMdns()
                     UIManager:show(InfoMessage:new{
-                        text = _("mDNS responder stopped."),
+                        text = _("mDNS stopped."),
                     })
                     if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,

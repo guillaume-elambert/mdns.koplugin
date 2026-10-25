@@ -8,6 +8,8 @@
 set -euo pipefail
 
 SUBMODULE_DIR=".submodules/filesync-koplugin"
+SOURCES_DIR="mdns.koplugin"
+LIB_DIR="${SOURCES_DIR}/lib"
 REF="${1:-master}"
 
 # 1. Initialize submodule if needed
@@ -30,9 +32,12 @@ cd - >/dev/null
 
 # 4. Copy the file into lib/ (do NOT use a symlink: e-readers use FAT32
 #    which cannot handle POSIX symlinks and causes XSym corruption)
-mkdir -p lib
-rm -f lib/mdns.lua
-cp "$SUBMODULE_DIR/filesync/mdns.lua" lib/mdns.lua
+mkdir -p "$LIB_DIR"
+slashes="${LIB_DIR//[^\/]/}"   # keep only '/' chars
+up="../"
+for ((i=0; i<${#slashes}; i++)); do up+="../"; done
+echo "${up}${SUBMODULE_DIR}/filesync/mdns.lua"
+ln -sf "${up}${SUBMODULE_DIR}/filesync/mdns.lua" "${LIB_DIR}/mdns.lua"
 
 echo "✓ Updated $SUBMODULE_DIR to $(git -C "$SUBMODULE_DIR" rev-parse --short HEAD)"
-echo "✓ Copied real file to lib/mdns.lua (FAT32/e-reader compatible)"
+echo "✓ Copied real file to $LIB_DIR/mdns.lua"

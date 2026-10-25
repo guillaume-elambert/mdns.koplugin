@@ -1,4 +1,4 @@
-# mdns.koplugin — mDNS Responder for KOReader
+# mdns.koplugin — mDNS for KOReader
 
 Announces your e-reader on the local network via **multicast DNS**
 (Bonjour / Avahi) so you can reach it at `<hostname>.local` from any
@@ -19,19 +19,11 @@ Works on **Kobo, Kindle, and Android**.
 
 ## Installation
 
-### 1. From Git (with submodule)
+### 1. From a Release ZIP (Recommended)
 
-Clone the repository recursively:
-
-```bash
-git clone --recurse-submodules https://github.com/<you>/mdns.koplugin.git
-cd mdns.koplugin
-make setup
-```
-
-### 2. Copying to your device
-
-Copy the `mdns.koplugin` folder to your device's KOReader `plugins/` directory:
+1. Download the latest `mdns.koplugin-vX.Y.Z.zip` from [Releases](../../releases).
+2. Extract the archive. It contains an `mdns.koplugin/` folder.
+3. Copy the `mdns.koplugin/` folder to your device's KOReader `plugins/` directory:
 
 | Device  | Plugin path                                           |
 |---------|-------------------------------------------------------|
@@ -39,23 +31,37 @@ Copy the `mdns.koplugin` folder to your device's KOReader `plugins/` directory:
 | Kindle  | `/mnt/us/koreader/plugins/mdns.koplugin/`              |
 | Android | Wherever KOReader is installed → `plugins/mdns.koplugin/` |
 
-You can copy via USB mass storage (drag & drop) or over SSH:
+4. Restart KOReader.
+
+### 2. From Git (Development)
+
+Clone recursively:
 
 ```bash
-# Over SSH (example for Kobo):
-rsync -av --exclude='.git*' . root@<reader-ip>:/mnt/onboard/.adds/koreader/plugins/mdns.koplugin/
-
-# Or directly to USB drive:
-cp -r . /Volumes/KOBOeReader/.adds/koreader/plugins/mdns.koplugin/
+git clone --recurse-submodules https://github.com/<you>/mdns.koplugin.git
+cd mdns.koplugin
+make setup
 ```
 
-### 3. Restart KOReader
+To build a standalone zip archive with all symlinks resolved into real files:
 
-After copying, restart KOReader.
+```bash
+make package
+# Creates dist/mdns.koplugin-v1.0.0.zip and dist/mdns.koplugin.zip
+```
+
+Copy the plugin to your e-reader:
+```bash
+# Over SSH (example for Kobo):
+rsync -avL --exclude='.git*' mdns.koplugin/ root@<reader-ip>:/mnt/onboard/.adds/koreader/plugins/mdns.koplugin/
+
+# Or via USB:
+cp -rL mdns.koplugin /Volumes/KOBOeReader/.adds/koreader/plugins/
+```
 
 ## Usage
 
-1. Open KOReader → **☰ Menu** → **Network** → **mDNS Responder**.
+1. Open KOReader → **☰ Menu** → **Network** → **mDNS**.
 2. Tap **Hostname** to set a custom name (e.g. `my-kobo`).
 3. The responder starts automatically when Wi-Fi connects.  
    You can also tap **Start now** / **Stop** manually.
@@ -67,44 +73,67 @@ After copying, restart KOReader.
 ## Directory Structure
 
 ```
-mdns.koplugin/
-├── _meta.lua                                # Plugin name, description
-├── main.lua                                 # Plugin entry point: lifecycle, menu, events
-├── .gitmodules                              # Submodule definition
+repository root/
+├── mdns.koplugin/                           # The KOReader plugin directory
+│   ├── _meta.lua                            # Plugin name, description, version
+│   ├── main.lua                             # Plugin entry point: lifecycle, menu, events
+│   └── lib/
+│       └── mdns.lua -> ../../.submodules/filesync-koplugin/filesync/mdns.lua
+├── .gitmodules                              # Git submodule config
 ├── .submodules/
 │   └── filesync-koplugin/                   # Sparse submodule (only filesync/mdns.lua)
-│       └── filesync/
-│           └── mdns.lua
-├── lib/
-│   └── mdns.lua                             # Upstream mdns module (real file, FAT32-safe)
-├── sync-mdns.sh                             # Helper: sparse-checkout & copy mdns.lua
-├── Makefile                                 # `make setup` and `make sync-mdns`
+├── sync-mdns.sh                             # Helper: sparse-checkout & update submodule
+├── package.sh                               # Packaging & tagging script
+├── Makefile                                 # Convenience targets
 ├── .github/
 │   └── workflows/
-│       └── sync-mdns.yml                    # Automated weekly CI updates
+│       ├── release.yml                      # Automated tag & release workflow
+│       └── sync-mdns.yml                    # Automated weekly dependency updates
 ├── .gitignore
 └── README.md
 ```
 
-## Dependency Management: Submodule + Sparse-Checkout + Direct Copy
+## Packaging & Releases (`package.sh`)
 
-This plugin uses a clean single-file dependency mechanism to track `filesync/mdns.lua`
-from [filesync.koplugin](https://github.com/abrahamnm/filesync.koplugin) without
-bloating the repository with the rest of `filesync`.
+[`package.sh`](file:///Users/guillaume/Downloads/mdns.koplugin/package.sh) automates version extraction from `_meta.lua`, symlink dereferencing, and zip creation:
 
-### Why a real file in `lib/` instead of a symlink?
+```bash
+# Build release zip (reads version from _meta.lua):
+make package
+# Or: ./package.sh
 
-E-reader user partitions (Kobo `/mnt/onboard`, Kindle `/mnt/us`) are formatted as **FAT32 (VFAT)**.
-FAT32 has **no support for POSIX symlinks**. When copying symlinks to FAT32 on macOS,
-macOS creates an emulated *Minshall-French* file starting with `XSym\n0050...`.
-When KOReader executes `dofile()` on Linux, Lua tries to parse this header and fails with:
-`'=' expected near '0050'`.
+# Build a dev/test archive (appends git commit hash):
+make dev
+# Or: ./package.sh --dev
 
-To avoid this, `lib/mdns.lua` is a **real file** copied directly from the sparse submodule.
+# Tag git repository with version from _meta.lua (e.g. v1.0.0):
+make tag
+# Or: ./package.sh --tag
 
-### Keeping the mDNS module updated
+# Tag, push tag, and publish release via GitHub CLI ('gh'):
+make release
+# Or: ./package.sh --release
+```
 
-To update to the latest upstream version at any time:
+### Symlink Dereferencing
+
+In the git repository, `mdns.koplugin/lib/mdns.lua` is a relative symlink to the sparse submodule.
+When creating zip archives, `package.sh` uses `cp -rL` to **dereference all symlinks** into real files.
+This guarantees that the resulting zip can be extracted on any e-reader FAT32 filesystem without triggering `XSym` syntax errors.
+
+## GitHub Actions Release Workflow
+
+The workflow [`.github/workflows/release.yml`](file:///Users/guillaume/Downloads/mdns.koplugin/.github/workflows/release.yml):
+1. Runs whenever changes to `mdns.koplugin/**` are pushed to `master`/`main` (or via manual trigger).
+2. Extracts the `version` field from `_meta.lua`.
+3. Checks if a git tag `v<version>` already exists:
+   - If **new**: creates and pushes git tag `v<version>`, builds the zip archive, and creates a GitHub Release with the archive attached.
+   - If **already existing**: skips to avoid duplicate releases.
+4. Can also be triggered manually from GitHub Actions UI (`workflow_dispatch`) with optional `force_release` or `prerelease` flags.
+
+## Updating the mDNS Upstream Dependency
+
+To update `filesync/mdns.lua` to the latest upstream commit:
 
 ```bash
 # Update to latest upstream master:
@@ -114,35 +143,10 @@ make sync-mdns
 make sync-mdns MDNS_REF=v1.11.1
 ```
 
-This runs `sync-mdns.sh`, which:
-1. Fetches the ref inside `.submodules/filesync-koplugin`.
-2. Applies sparse-checkout to keep only `/filesync/mdns.lua`.
-3. Copies `filesync/mdns.lua` into `lib/mdns.lua`.
-
-Then commit the changes:
+Commit the updated submodule:
 ```bash
-git add .submodules/filesync-koplugin lib/mdns.lua
+git add .submodules/filesync-koplugin mdns.koplugin/lib/mdns.lua
 git commit -m "chore: update filesync submodule (mdns.lua)"
 ```
 
-## How It Works
-
-1. **Plugin loads** (`init`) → opens `LuaSettings` from
-   `<koreader-settings>/mdns.lua`, registers menu items, and checks
-   if Wi-Fi is already connected.
-2. **`onNetworkConnected`** → detects the device IP (via NetworkMgr,
-   `ifconfig`, or UDP socket trick), reads the saved hostname, creates
-   an `Mdns` instance via `dofile(_plugin_dir .. "/lib/mdns.lua")`, and calls `start()`.
-3. **`onNetworkDisconnected`** → calls `stop()` (sends mDNS goodbye
-   packet) and cleans up.
-4. **Hostname change** → persists via `LuaSettings`, then restarts the
-   responder if it was running.
-
-## Dependencies
-
-The `mdns.lua` module requires only:
-- `socket` (LuaSocket) — **ships with KOReader** ✓
-- `ui/uimanager` (UIManager) — **KOReader core** ✓
-- `logger` — **KOReader core** ✓
-
-No extra external native libraries or Lua rocks are required.
+A scheduled GitHub Action (`sync-mdns.yml`) also checks for updates weekly and opens a PR automatically.
