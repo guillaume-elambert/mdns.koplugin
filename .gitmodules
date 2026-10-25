@@ -1,0 +1,3 @@
+[submodule ".submodules/filesync-koplugin"]
+	path = .submodules/filesync-koplugin
+	url = https://github.com/abrahamnm/filesync.koplugin.git
